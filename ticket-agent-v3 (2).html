@@ -1,0 +1,1843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ticket Agent — WIOM</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Syne:wght@600;700;800&display=swap');
+
+:root {
+  --bg: #0c0e13;
+  --s1: #111318;
+  --s2: #161a22;
+  --s3: #1c2130;
+  --border: #232b3a;
+  --border2: #2d3a50;
+  --accent: #4f8fff;
+  --accent2: #7b61ff;
+  --green: #2ecc8a;
+  --green-dim: rgba(46,204,138,0.1);
+  --green-border: rgba(46,204,138,0.25);
+  --orange: #ffaa44;
+  --orange-dim: rgba(255,170,68,0.1);
+  --orange-border: rgba(255,170,68,0.25);
+  --red: #ff5566;
+  --red-dim: rgba(255,85,102,0.1);
+  --purple: #b06fff;
+  --purple-dim: rgba(176,111,255,0.1);
+  --text: #dce6f5;
+  --muted: #5a6a80;
+  --dim: #2a3545;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace; min-height: 100vh; }
+
+/* grid bg */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: linear-gradient(rgba(79,143,255,0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(79,143,255,0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none; z-index: 0;
+}
+
+/* ── Nav ── */
+.nav {
+  position: sticky; top: 0; z-index: 200;
+  background: rgba(12,14,19,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  height: 52px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-logo { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 800; color: var(--text); letter-spacing: -0.3px; }
+.nav-logo span { color: var(--accent); }
+.nav-meta { font-size: 0.58rem; color: var(--muted); display: flex; gap: 16px; align-items: center; }
+.nbadge { padding: 3px 10px; border-radius: 20px; font-size: 0.58rem; background: rgba(79,143,255,0.1); border: 1px solid rgba(79,143,255,0.2); color: var(--accent); }
+
+/* ── Layout ── */
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: calc(100vh - 52px); position: relative; z-index: 1; }
+
+/* ── Sidebar ── */
+.sidebar {
+  border-right: 1px solid var(--border);
+  background: var(--s1);
+  padding: 20px 0;
+  position: sticky;
+  top: 52px;
+  height: calc(100vh - 52px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-section { padding: 6px 16px 4px; font-size: 0.52rem; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; font-weight: 600; margin-top: 8px; }
+
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 0.68rem;
+  color: var(--muted);
+  border-left: 2px solid transparent;
+  margin: 0 4px;
+  border-radius: 0 6px 6px 0;
+}
+.nav-item:hover { background: var(--s2); color: var(--text); }
+.nav-item.active { background: rgba(79,143,255,0.08); color: var(--accent); border-left-color: var(--accent); }
+.nav-item.done { color: var(--green); border-left-color: var(--green-border); }
+.nav-item .ni-icon { font-size: 0.9rem; width: 18px; text-align: center; }
+.nav-item .ni-badge { margin-left: auto; font-size: 0.55rem; padding: 1px 6px; border-radius: 10px; background: var(--dim); color: var(--muted); }
+.nav-item.done .ni-badge { background: var(--green-dim); color: var(--green); }
+.nav-item.active .ni-badge { background: rgba(79,143,255,0.15); color: var(--accent); }
+
+.sidebar-footer { margin-top: auto; padding: 16px; border-top: 1px solid var(--border); }
+.run-sidebar {
+  width: 100%;
+  padding: 11px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.run-sidebar:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(79,143,255,0.3); }
+.run-sidebar:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+/* ── Main ── */
+.main { padding: 28px; overflow-y: auto; }
+
+/* ── Section ── */
+.section { display: none; }
+.section.active { display: block; }
+
+.sec-header { margin-bottom: 22px; }
+.sec-title { font-family: 'Syne', sans-serif; font-size: 1.3rem; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+.sec-sub { font-size: 0.62rem; color: var(--muted); line-height: 1.6; }
+
+/* ── Card ── */
+.card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.card-head {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.62rem; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 1px;
+  background: var(--s2);
+}
+.card-head .dot { width: 7px; height: 7px; border-radius: 50%; }
+.dot-green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.dot-blue { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.dot-orange { background: var(--orange); box-shadow: 0 0 6px var(--orange); }
+.dot-purple { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
+.dot-dim { background: var(--dim); }
+.card-body { padding: 18px; }
+
+/* ── Upload grid ── */
+.upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.upload-box {
+  border: 2px dashed var(--border2);
+  border-radius: 10px;
+  padding: 24px 18px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  background: var(--s2);
+}
+.upload-box:hover, .upload-box.drag { border-color: var(--accent); background: rgba(79,143,255,0.04); }
+.upload-box.loaded { border-style: solid; border-color: var(--green-border); background: var(--green-dim); }
+.upload-box input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.ub-icon { font-size: 1.6rem; margin-bottom: 8px; }
+.ub-title { font-family: 'Syne', sans-serif; font-size: 0.8rem; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.ub-sub { font-size: 0.58rem; color: var(--muted); line-height: 1.6; }
+.ub-loaded { font-size: 0.62rem; color: var(--green); margin-top: 8px; font-weight: 500; }
+
+/* Google Sheets link box */
+.gsheet-box {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.gsheet-row { display: flex; gap: 10px; align-items: flex-end; }
+.gsheet-status {
+  margin-top: 10px;
+  font-size: 0.62rem;
+  padding: 8px 12px;
+  border-radius: 6px;
+  display: none;
+}
+.gsheet-status.ok { display: block; background: var(--green-dim); border: 1px solid var(--green-border); color: var(--green); }
+.gsheet-status.err { display: block; background: var(--red-dim); border: 1px solid rgba(255,85,102,0.25); color: var(--red); }
+.gsheet-status.loading { display: block; background: rgba(79,143,255,0.08); border: 1px solid rgba(79,143,255,0.2); color: var(--accent); }
+
+.how-to {
+  font-size: 0.6rem;
+  color: var(--muted);
+  background: var(--s3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  line-height: 1.9;
+  margin-top: 10px;
+}
+.how-to strong { color: var(--accent); }
+
+/* ── Fields ── */
+.field-grid { display: grid; gap: 12px; }
+.field-grid.col2 { grid-template-columns: 1fr 1fr; }
+.field-grid.col3 { grid-template-columns: 1fr 1fr 1fr; }
+
+.field label {
+  display: block;
+  font-size: 0.56rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 5px;
+  font-weight: 600;
+}
+.field input, .field select, .field textarea {
+  width: 100%;
+  background: var(--s3);
+  border: 1px solid var(--border2);
+  border-radius: 7px;
+  padding: 9px 12px;
+  color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  outline: none;
+  transition: all 0.2s;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,143,255,0.08);
+}
+.field textarea { resize: vertical; min-height: 80px; line-height: 1.7; }
+
+/* ── Buttons ── */
+.btn {
+  padding: 9px 18px;
+  border: none;
+  border-radius: 7px;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.btn-accent { background: var(--accent); color: #fff; }
+.btn-accent:hover { background: #3a78f0; }
+.btn-green { background: var(--green); color: #000; }
+.btn-green:hover { filter: brightness(1.1); }
+.btn-ghost { background: transparent; border: 1px solid var(--border2); color: var(--muted); }
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sm { padding: 6px 12px; font-size: 0.62rem; }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Custom instructions ── */
+.inst-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+
+.inst-item {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  transition: border-color 0.2s;
+}
+.inst-item:hover { border-color: var(--border2); }
+.inst-item.enabled { border-left: 3px solid var(--green); }
+.inst-item.disabled-item { opacity: 0.5; border-left: 3px solid var(--dim); }
+
+.inst-toggle {
+  width: 32px; height: 18px;
+  background: var(--dim);
+  border-radius: 9px;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  border: none;
+  transition: background 0.2s;
+  margin-top: 2px;
+}
+.inst-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 14px; height: 14px;
+  background: var(--muted);
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+.inst-toggle.on { background: rgba(46,204,138,0.25); }
+.inst-toggle.on::after { left: 16px; background: var(--green); }
+
+.inst-content { flex: 1; }
+.inst-name { font-size: 0.68rem; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.inst-desc { font-size: 0.6rem; color: var(--muted); line-height: 1.5; }
+.inst-remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.8rem; padding: 2px 4px; border-radius: 4px; }
+.inst-remove:hover { color: var(--red); background: var(--red-dim); }
+
+.add-inst-form {
+  background: var(--s2);
+  border: 1px dashed var(--border2);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+/* ── Pipeline ── */
+.pipeline { display: flex; gap: 0; margin-bottom: 14px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+.pipe-step {
+  flex: 1;
+  padding: 14px 12px;
+  background: var(--s1);
+  border-right: 1px solid var(--border);
+  transition: background 0.3s;
+  position: relative;
+}
+.pipe-step:last-child { border-right: none; }
+.pipe-step.active { background: rgba(79,143,255,0.06); }
+.pipe-step.done { background: var(--green-dim); }
+.pipe-step.error { background: var(--red-dim); }
+.pipe-icon { font-size: 1.1rem; margin-bottom: 6px; }
+.pipe-lbl { font-family: 'Syne', sans-serif; font-size: 0.65rem; font-weight: 700; color: var(--muted); margin-bottom: 2px; }
+.pipe-step.active .pipe-lbl { color: var(--accent); }
+.pipe-step.done .pipe-lbl { color: var(--green); }
+.pipe-desc { font-size: 0.55rem; color: var(--muted); line-height: 1.4; }
+.pipe-step .spin {
+  position: absolute; top: 10px; right: 10px;
+  width: 10px; height: 10px;
+  border: 2px solid rgba(79,143,255,0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: none;
+}
+.pipe-step.active .spin { display: block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Log ── */
+.log {
+  background: #060810;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 0.63rem;
+  line-height: 1.9;
+  min-height: 100px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.l-t { color: var(--dim); margin-right: 8px; }
+.l-i { color: var(--accent); }
+.l-ok { color: var(--green); }
+.l-w { color: var(--orange); }
+.l-e { color: var(--red); }
+.l-d { color: #2a3a50; }
+
+/* ── Progress ── */
+.prog { margin: 10px 0; }
+.prog-row { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--muted); margin-bottom: 5px; }
+.prog-bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.prog-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; transition: width 0.4s ease; }
+
+/* ── Stats ── */
+.stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 14px; }
+.stat { background: var(--s1); border: 1px solid var(--border); border-radius: 10px; padding: 14px 12px; }
+.stat-lbl { font-size: 0.52rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 600; }
+.stat-val { font-family: 'Syne', sans-serif; font-size: 1.5rem; font-weight: 800; line-height: 1; }
+
+/* ── Tabs ── */
+.tabs { display: flex; gap: 2px; padding: 10px 14px 0; background: var(--s2); border-bottom: 1px solid var(--border); }
+.tab { padding: 7px 14px; font-size: 0.6rem; font-weight: 600; cursor: pointer; color: var(--muted); border-radius: 6px 6px 0 0; border: 1px solid transparent; border-bottom: none; margin-bottom: -1px; transition: all 0.15s; }
+.tab:hover { color: var(--text); }
+.tab.active { background: var(--s1); border-color: var(--border); color: var(--accent); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Table ── */
+.tbl-wrap { overflow-x: auto; max-height: 380px; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.6rem; }
+thead { position: sticky; top: 0; z-index: 1; }
+th { background: var(--s2); padding: 8px 12px; text-align: left; color: var(--muted); font-size: 0.54rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border2); white-space: nowrap; }
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+tr:hover td { background: rgba(255,255,255,0.015); }
+.chip { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 0.56rem; font-weight: 600; }
+.chip-green { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
+.chip-blue { background: rgba(79,143,255,0.1); color: var(--accent); border: 1px solid rgba(79,143,255,0.2); }
+.chip-orange { background: var(--orange-dim); color: var(--orange); border: 1px solid var(--orange-border); }
+
+.empty { padding: 44px 32px; text-align: center; color: var(--muted); }
+.empty-icon { font-size: 2rem; margin-bottom: 10px; opacity: 0.35; }
+.empty-title { font-family: 'Syne', sans-serif; font-size: 0.85rem; margin-bottom: 4px; color: var(--muted); }
+.empty-sub { font-size: 0.6rem; line-height: 1.7; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ── Error Modal ── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+.modal-overlay.show { opacity: 1; pointer-events: all; }
+
+.modal {
+  background: #111318;
+  border: 1px solid #ff5566;
+  border-radius: 14px;
+  width: 90%;
+  max-width: 680px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,85,102,0.2);
+  transform: translateY(8px);
+  transition: transform 0.2s;
+}
+.modal-overlay.show .modal { transform: translateY(0); }
+
+.modal-head {
+  padding: 16px 20px;
+  border-bottom: 1px solid #1e2535;
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
+}
+.modal-head-icon {
+  width: 32px; height: 32px;
+  background: rgba(255,85,102,0.12);
+  border: 1px solid rgba(255,85,102,0.3);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.modal-title { font-family: 'Syne', sans-serif; font-size: 0.95rem; font-weight: 700; color: #ff5566; flex: 1; }
+.modal-close {
+  width: 28px; height: 28px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid #232b3a;
+  border-radius: 6px;
+  color: #5a6a80;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.modal-close:hover { background: rgba(255,85,102,0.1); border-color: #ff5566; color: #ff5566; }
+
+.modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+
+.modal-section { margin-bottom: 16px; }
+.modal-section:last-child { margin-bottom: 0; }
+.modal-section-title {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #5a6a80;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.error-message-box {
+  background: rgba(255,85,102,0.06);
+  border: 1px solid rgba(255,85,102,0.2);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 0.72rem;
+  color: #ff8899;
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.error-step-box {
+  background: #0d1018;
+  border: 1px solid #1e2535;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 0.65rem;
+  color: #5a6a80;
+  line-height: 1.8;
+}
+.error-step-box .step-failed { color: #ff5566; font-weight: 600; }
+.error-step-box .step-ok { color: #2ecc8a; }
+.error-step-box .step-skip { color: #2a3545; }
+
+.error-trace-box {
+  background: #060810;
+  border: 1px solid #1e2535;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 0.6rem;
+  color: #3a5a7a;
+  line-height: 1.9;
+  max-height: 180px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.fix-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fix-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: rgba(79,143,255,0.04);
+  border: 1px solid rgba(79,143,255,0.12);
+  border-radius: 8px;
+  font-size: 0.65rem;
+  line-height: 1.6;
+  color: #8aa8d0;
+}
+.fix-num {
+  width: 20px; height: 20px;
+  background: rgba(79,143,255,0.15);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: #4f8fff;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.modal-footer {
+  padding: 14px 20px;
+  border-top: 1px solid #1e2535;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 10px;
+}
+.modal-timestamp { font-size: 0.58rem; color: #2a3545; }
+.modal-footer-btns { display: flex; gap: 8px; }
+.btn-copy-error {
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid #232b3a;
+  border-radius: 6px;
+  color: #5a6a80;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-copy-error:hover { border-color: #4f8fff; color: #4f8fff; }
+.btn-close-modal {
+  padding: 7px 16px;
+  background: rgba(255,85,102,0.1);
+  border: 1px solid rgba(255,85,102,0.3);
+  border-radius: 6px;
+  color: #ff5566;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-close-modal:hover { background: rgba(255,85,102,0.2); }
+</style>
+</head>
+<body>
+
+
+<!-- ── Error Modal ── -->
+<div class="modal-overlay" id="errorModal" onclick="closeErrorModal(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-head-icon">🚨</div>
+      <div class="modal-title" id="modalTitle">Error Details</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="modal-section">
+        <div class="modal-section-title">Error Message</div>
+        <div class="error-message-box" id="modalMessage">—</div>
+      </div>
+
+      <div class="modal-section" id="modalStepSection">
+        <div class="modal-section-title">Pipeline — Where it failed</div>
+        <div class="error-step-box" id="modalSteps">—</div>
+      </div>
+
+      <div class="modal-section" id="modalFixSection">
+        <div class="modal-section-title">💡 How to fix this</div>
+        <div class="fix-suggestions" id="modalFixes">—</div>
+      </div>
+
+      <div class="modal-section" id="modalTraceSection">
+        <div class="modal-section-title">Full Error Trace (for reporting)</div>
+        <div class="error-trace-box" id="modalTrace">—</div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <div class="modal-timestamp" id="modalTime">—</div>
+      <div class="modal-footer-btns">
+        <button class="btn-copy-error" onclick="copyErrorDetails()">📋 Copy Error Details</button>
+        <button class="btn-close-modal" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<nav class="nav">
+  <div class="nav-logo">Ticket<span>Agent</span></div>
+  <div class="nav-meta">
+    <span>WIOM · Kapture CRM Daily Automation</span>
+    <span class="nbadge" id="readyBadge">⚠ Upload files to begin</span>
+  </div>
+</nav>
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-section">Setup</div>
+    <div class="nav-item active" onclick="go('upload')">
+      <span class="ni-icon">📁</span> Upload Files
+      <span class="ni-badge" id="nb-upload">0/2</span>
+    </div>
+    <div class="nav-item" onclick="go('master')">
+      <span class="ni-icon">🔗</span> Master Sheet (Drive)
+      <span class="ni-badge" id="nb-master">not set</span>
+    </div>
+    <div class="nav-item" onclick="go('filter')">
+      <span class="ni-icon">🔍</span> Filter Config
+      <span class="ni-badge" id="nb-filter">set</span>
+    </div>
+    <div class="nav-item" onclick="go('instructions')">
+      <span class="ni-icon">📝</span> Custom Instructions
+      <span class="ni-badge" id="nb-inst">2 active</span>
+    </div>
+
+    <div class="sidebar-section">Run</div>
+    <div class="nav-item" onclick="go('pipeline')">
+      <span class="ni-icon">⚙️</span> Pipeline Status
+      <span class="ni-badge" id="nb-pipe">idle</span>
+    </div>
+    <div class="nav-item" onclick="go('results')">
+      <span class="ni-icon">📊</span> Results
+      <span class="ni-badge" id="nb-results">—</span>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="run-sidebar" id="runBtn" onclick="runAgent()" disabled>
+        ⚡ Run Agent
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="main">
+
+    <!-- SECTION: Upload -->
+    <div class="section active" id="sec-upload">
+      <div class="sec-header">
+        <div class="sec-title">Upload Files</div>
+        <div class="sec-sub">Upload the raw daily report. The master sheet can be linked via Google Drive below.</div>
+      </div>
+
+      <div class="upload-grid">
+        <div class="upload-box" id="rawBox" ondragover="drag(event,'rawBox',1)" ondragleave="drag(event,'rawBox',0)" ondrop="drop(event,'raw')">
+          <input type="file" accept=".xlsx,.xls,.csv" onchange="loadFile(event,'raw')">
+          <div class="ub-icon">📥</div>
+          <div class="ub-title">Raw Report File</div>
+          <div class="ub-sub">Daily Kapture CRM export<br>"Queue wise pending report last 60 days"</div>
+          <div class="ub-loaded" id="rawLoaded" style="display:none"></div>
+        </div>
+
+        <div class="upload-box" id="masterBox" ondragover="drag(event,'masterBox',1)" ondragleave="drag(event,'masterBox',0)" ondrop="drop(event,'master')">
+          <input type="file" accept=".xlsx,.xls,.csv" onchange="loadFile(event,'master')">
+          <div class="ub-icon">📋</div>
+          <div class="ub-title">Master Sheet (Manual)</div>
+          <div class="ub-sub">Or use the Drive link instead →<br>"Kapture Daily Pending Data"</div>
+          <div class="ub-loaded" id="masterLoaded" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION: Master Sheet Drive -->
+    <div class="section" id="sec-master">
+      <div class="sec-header">
+        <div class="sec-title">Master Sheet — Google Drive</div>
+        <div class="sec-sub">Paste your Google Sheets link once. The agent will always pull the latest data from Drive automatically.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div class="dot dot-blue"></div> Google Sheets Link</div>
+        <div class="card-body">
+          <div class="gsheet-row">
+            <div class="field" style="flex:1">
+              <label>Apps Script Web App URL (ends with /exec)</label>
+              <input type="text" id="sheetUrl" placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec" oninput="onUrlInput()">
+            </div>
+            <button class="btn btn-accent" onclick="connectSheet()">Connect Sheet</button>
+          </div>
+          <div class="gsheet-status" id="sheetStatus"></div>
+
+          <div class="how-to">
+            <strong>Paste your Apps Script Web App URL here (ends with /exec)</strong><br><br>
+            If you haven't deployed yet:<br>
+            1. In your master sheet → <strong>Extensions → Apps Script</strong><br>
+            2. Paste the provided script → <strong>Save</strong><br>
+            3. <strong>Deploy → New deployment → Web app</strong><br>
+            4. Execute as: <strong>Me</strong> · Who has access: <strong>Anyone</strong><br>
+            5. Click Deploy → copy the <strong>/exec URL</strong><br><br>
+            <strong>🔒 Secure:</strong> Sheet stays private. Only your Google account runs this script.
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div class="dot dot-blue"></div> Sheet Configuration</div>
+        <div class="card-body">
+          <div class="field-grid col2">
+            <div class="field">
+              <label>Sheet Tab Name</label>
+              <input type="text" id="sheetTabName" value="22nd Dec" placeholder="e.g. 22nd Dec, Sheet1">
+            </div>
+            <div class="field">
+              <label>Ticket ID Column (in master)</label>
+              <input type="text" id="masterTicketCol" value="Ticket No" placeholder="e.g. Ticket No">
+            </div>
+            <div class="field">
+              <label>Formula Column 1 (drag down)</label>
+              <input type="text" id="formulaCol1" value="CL" placeholder="e.g. CL">
+            </div>
+            <div class="field">
+              <label>Formula Column 2 (drag down)</label>
+              <input type="text" id="formulaCol2" value="CM" placeholder="e.g. CM">
+            </div>
+            <div class="field">
+              <label>Date Column (today's date)</label>
+              <input type="text" id="dateCol" value="CN" placeholder="e.g. CN">
+            </div>
+          </div>
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);font-size:0.6rem;color:var(--muted);line-height:1.8;background:var(--s3);padding:12px 14px;border-radius:8px;border:1px solid var(--border)">
+            <span style="color:var(--green);font-weight:600">✓ Formula drag is automatic.</span>
+            The agent finds the last formula in columns CL and CM and drags it down to all new rows.
+            When loaded via Apps Script (values only), it reconstructs the formula pattern automatically.
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div class="dot dot-orange"></div> Change Apps Script URL</div>
+        <div class="card-body">
+          <div style="font-size:0.62rem;color:var(--muted);margin-bottom:12px;line-height:1.7">
+            Need to update your Apps Script deployment URL? Change it here and reconnect.
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-end">
+            <div class="field" style="flex:1">
+              <label>Current URL</label>
+              <input type="text" id="sheetUrlEdit" placeholder="Paste new Apps Script URL here" style="font-size:0.62rem">
+            </div>
+            <button class="btn btn-accent" onclick="updateScriptUrl()">Update & Reconnect</button>
+            <button class="btn btn-ghost" onclick="clearScriptUrl()">Clear</button>
+          </div>
+          <div class="gsheet-status" id="sheetStatusEdit" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION: Filter -->
+    <div class="section" id="sec-filter">
+      <div class="sec-header">
+        <div class="sec-title">Filter Configuration</div>
+        <div class="sec-sub">These filters are applied to the raw file first before any deduplication.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div class="dot dot-blue"></div> Primary Filter</div>
+        <div class="card-body">
+          <div class="field-grid col3">
+            <div class="field">
+              <label>Filter Column</label>
+              <input type="text" id="filterCol" value="Disposition Folder Level 3">
+            </div>
+            <div class="field">
+              <label>Filter Value</label>
+              <input type="text" id="filterVal" value="Internet Issues">
+            </div>
+            <div class="field">
+              <label>Match Type</label>
+              <select id="matchType">
+                <option value="exact">Exact match</option>
+                <option value="contains">Contains</option>
+                <option value="startswith">Starts with</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div class="dot dot-blue"></div> Additional Filters (Optional)</div>
+        <div class="card-body">
+          <div id="extraFilters" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
+          <button class="btn btn-ghost btn-sm" onclick="addExtraFilter()">+ Add another filter</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION: Custom Instructions -->
+    <div class="section" id="sec-instructions">
+      <div class="sec-header">
+        <div class="sec-title">Custom Instructions</div>
+        <div class="sec-sub">Add your own steps that the agent will execute after the standard pipeline. Toggle them on/off anytime.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div class="dot dot-purple"></div> Active Instructions</div>
+        <div class="card-body" style="padding:12px">
+          <div class="inst-list" id="instList"></div>
+          <div class="add-inst-form">
+            <div class="field-grid col2" style="margin-bottom:10px">
+              <div class="field">
+                <label>Instruction Name</label>
+                <input type="text" id="newInstName" placeholder="e.g. Remove closed tickets">
+              </div>
+              <div class="field">
+                <label>When to run</label>
+                <select id="newInstWhen">
+                  <option value="after-filter">After filtering</option>
+                  <option value="after-dedupe">After deduplication</option>
+                  <option value="after-append">After appending</option>
+                  <option value="before-export">Before export</option>
+                </select>
+              </div>
+            </div>
+            <div class="field" style="margin-bottom:10px">
+              <label>Instruction (describe what to do in plain language)</label>
+              <textarea id="newInstDesc" placeholder="e.g. Remove any tickets where Status column = 'Closed' or 'Resolved'&#10;e.g. Flag tickets older than 30 days in a new column called 'Aging'&#10;e.g. Sort results by Created Date oldest first"></textarea>
+            </div>
+            <button class="btn btn-accent btn-sm" onclick="addInstruction()">+ Add Instruction</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div class="dot dot-dim"></div> Instruction Examples</div>
+        <div class="card-body" style="padding:12px">
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="addPreset('Remove Closed Tickets','Remove rows where Status = Closed or Resolved','after-filter')">+ Remove closed tickets</button>
+            <button class="btn btn-ghost btn-sm" onclick="addPreset('Flag Aging Tickets','Add a column called Aging Flag = YES for tickets where Pending No of Days > 30','after-dedupe')">+ Flag aging > 30 days</button>
+            <button class="btn btn-ghost btn-sm" onclick="addPreset('Sort by Date','Sort all rows by Created Date oldest first','before-export')">+ Sort by created date</button>
+            <button class="btn btn-ghost btn-sm" onclick="addPreset('Keep Key Columns Only','Keep only these columns: Ticket No, Created Date, Customer Name, Status, Disposition Folder Level 3, Zone, City','before-export')">+ Keep key columns only</button>
+            <button class="btn btn-ghost btn-sm" onclick="addPreset('Add Summary Row','Add a final row at the bottom showing total count of tickets appended today','after-append')">+ Add summary row</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION: Pipeline -->
+    <div class="section" id="sec-pipeline">
+      <div class="sec-header">
+        <div class="sec-title">Pipeline Status</div>
+        <div class="sec-sub">Real-time progress of all agent steps.</div>
+      </div>
+
+      <div class="pipeline">
+        <div class="pipe-step" id="p1"><div class="spin"></div><div class="pipe-icon">🔍</div><div class="pipe-lbl">Filter</div><div class="pipe-desc">Apply Folder Level 3 filter to raw file</div></div>
+        <div class="pipe-step" id="p2"><div class="spin"></div><div class="pipe-icon">🔗</div><div class="pipe-lbl">Load Master</div><div class="pipe-desc">Read master sheet from Drive or upload</div></div>
+        <div class="pipe-step" id="p3"><div class="spin"></div><div class="pipe-icon">✂️</div><div class="pipe-lbl">Dedupe</div><div class="pipe-desc">Remove tickets already in master</div></div>
+        <div class="pipe-step" id="p4"><div class="spin"></div><div class="pipe-icon">📎</div><div class="pipe-lbl">Append</div><div class="pipe-desc">Paste new rows at end of master</div></div>
+        <div class="pipe-step" id="p5"><div class="spin"></div><div class="pipe-icon">📅</div><div class="pipe-lbl">Finalize</div><div class="pipe-desc">Drag formulas + write date in CN</div></div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head"><div class="dot dot-blue"></div> Agent Log</div>
+        <div class="card-body" style="padding:10px">
+          <div class="log" id="log"><span class="l-d">// Waiting for agent to run...</span></div>
+          <div class="prog" style="margin-top:10px">
+            <div class="prog-row"><span id="progLabel">Idle</span><span id="progPct">—</span></div>
+            <div class="prog-bar"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats" id="statsRow" style="display:none">
+        <div class="stat"><div class="stat-lbl">Raw Rows</div><div class="stat-val" style="color:var(--text)" id="s1">—</div></div>
+        <div class="stat"><div class="stat-lbl">After Filter</div><div class="stat-val" style="color:var(--accent)" id="s2">—</div></div>
+        <div class="stat"><div class="stat-lbl">Dupes Removed</div><div class="stat-val" style="color:var(--orange)" id="s3">—</div></div>
+        <div class="stat"><div class="stat-lbl">New Tickets</div><div class="stat-val" style="color:var(--green)" id="s4">—</div></div>
+        <div class="stat"><div class="stat-lbl">Appended</div><div class="stat-val" style="color:var(--purple)" id="s5">—</div></div>
+      </div>
+    </div>
+
+    <!-- SECTION: Results -->
+    <div class="section" id="sec-results">
+      <div class="sec-header">
+        <div class="sec-title">Results</div>
+        <div class="sec-sub">View filtered tickets, removed duplicates, and download the updated master sheet.</div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <button class="btn btn-green" id="btnNew" onclick="exportNew()" disabled>↓ New Tickets XLSX</button>
+        <button class="btn btn-accent" id="btnMaster" onclick="exportMaster()" disabled>↓ Updated Master XLSX</button>
+      </div>
+
+      <div class="card">
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab('new')">🆕 New Tickets <span id="tnew" style="opacity:0.5"></span></div>
+          <div class="tab" onclick="switchTab('dupe')">⚠️ Duplicates <span id="tdupe" style="opacity:0.5"></span></div>
+          <div class="tab" onclick="switchTab('master')">📋 Updated Master <span id="tmaster" style="opacity:0.5"></span></div>
+        </div>
+
+        <div class="tab-panel active" id="tab-new">
+          <div class="empty" id="emNew"><div class="empty-icon">🆕</div><div class="empty-title">No results yet</div><div class="empty-sub">Run the agent to see new tickets here</div></div>
+          <div id="tblNew"></div>
+        </div>
+        <div class="tab-panel" id="tab-dupe">
+          <div class="empty" id="emDupe"><div class="empty-icon">⚠️</div><div class="empty-title">No duplicates yet</div><div class="empty-sub">Tickets already in master will appear here</div></div>
+          <div id="tblDupe"></div>
+        </div>
+        <div class="tab-panel" id="tab-master">
+          <div class="empty" id="emMaster"><div class="empty-icon">📋</div><div class="empty-title">Master sheet not ready</div><div class="empty-sub">Run the agent to see the updated master here</div></div>
+          <div id="tblMaster"></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let rawWB = null, masterWB = null;
+let savedAppsScriptUrl = null;
+let masterFromDrive = false;
+let masterFileName = 'master';
+let newTickets = [], dupeTickets = [];
+let rawHeaders = [], masterHeaders = [];
+let masterOriginalRows = [];
+let updatedMasterRows = [];
+let masterWBFinal = null;
+let masterSheetName = '';
+
+const instructions = [
+  { id: 1, name: 'Filter Internet Issues', desc: 'Keep only rows where Disposition Folder Level 3 = Internet Issues', when: 'after-filter', on: true, builtin: true },
+  { id: 2, name: 'Remove duplicates vs Master', desc: 'Cross-check Ticket No against master sheet and remove already-present tickets', when: 'after-dedupe', on: true, builtin: true },
+];
+let instId = 3;
+
+// ══════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════
+function go(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ══════════════════════════════════════════════
+// FILE UPLOAD
+// ══════════════════════════════════════════════
+function drag(e, id, on) { e.preventDefault(); document.getElementById(id).classList.toggle('drag', !!on); }
+function drop(e, type) {
+  e.preventDefault();
+  document.getElementById(type === 'raw' ? 'rawBox' : 'masterBox').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) processFile(file, type);
+}
+function loadFile(e, type) { const f = e.target.files[0]; if (f) processFile(f, type); }
+
+function processFile(file, type) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      if (type === 'raw') {
+        rawWB = wb;
+        const r = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+        document.getElementById('rawLoaded').textContent = `✓ ${file.name} — ${r.length - 1} rows`;
+        document.getElementById('rawLoaded').style.display = 'block';
+        document.getElementById('rawBox').classList.add('loaded');
+      } else {
+        masterWB = wb; masterFromDrive = false;
+        masterFileName = file.name;
+        const shTab = wb.SheetNames.find(s => s.toLowerCase() === document.getElementById('sheetTabName').value.toLowerCase()) || wb.SheetNames[0];
+        const r = XLSX.utils.sheet_to_json(wb.Sheets[shTab], { header: 1 });
+        document.getElementById('masterLoaded').textContent = `✓ ${file.name} — ${r.length - 1} rows`;
+        document.getElementById('masterLoaded').style.display = 'block';
+        document.getElementById('masterBox').classList.add('loaded');
+        document.getElementById('nb-master').textContent = 'uploaded';
+      }
+      updateReadyState();
+    } catch(err) { alert('Could not read: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function updateReadyState() {
+  const rawOk = !!rawWB;
+  const masterOk = !!masterWB;
+  const count = (rawOk ? 1 : 0) + (masterOk ? 1 : 0);
+  document.getElementById('nb-upload').textContent = `${count}/2`;
+  document.getElementById('runBtn').disabled = !(rawOk && masterOk);
+  document.getElementById('readyBadge').textContent = (rawOk && masterOk) ? '✓ Ready to run' : `⚠ ${2 - count} file(s) missing`;
+  document.getElementById('readyBadge').style.color = (rawOk && masterOk) ? 'var(--green)' : '';
+}
+
+// ══════════════════════════════════════════════
+// GOOGLE SHEETS CONNECT
+// ══════════════════════════════════════════════
+function onUrlInput() {
+  const url = document.getElementById('sheetUrl').value.trim();
+  document.getElementById('nb-master').textContent = url ? 'linked' : 'not set';
+}
+
+async function connectSheet() {
+  const url = document.getElementById('sheetUrl').value.trim();
+  if (!url) { showSheetStatus('Please paste your Apps Script Web App URL', 'err'); return; }
+
+  const tabName = document.getElementById('sheetTabName').value.trim();
+
+  // ── Detect URL type ──────────────────────────────────────
+  const isAppsScript = url.includes('script.google.com') && url.includes('/exec');
+  const isGoogleSheet = url.includes('spreadsheets/d/');
+
+  if (!isAppsScript && !isGoogleSheet) {
+    showSheetStatus('❌ URL not recognised. Paste your Apps Script Web App URL (ends with /exec)', 'err');
+    return;
+  }
+
+  showSheetStatus('🔄 Connecting...', 'loading');
+
+  try {
+    if (isAppsScript) {
+      // ── Apps Script Web App ──────────────────────────────
+      // Append sheet name as parameter
+      const fetchUrl = url + (url.includes('?') ? '&' : '?') + 'sheet=' + encodeURIComponent(tabName);
+
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error(`Server returned ${res.status}. Make sure the script is deployed and you are logged into Google.`);
+
+      const text = await res.text();
+
+      // Check for HTML error page
+      if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+        throw new Error('Got an HTML page instead of data. Make sure: (1) Script is deployed as Web App, (2) "Execute as: Me", (3) "Who has access: Anyone" — then redeploy.');
+      }
+
+      let json;
+      try { json = JSON.parse(text); } catch(e) { throw new Error('Response is not valid JSON. Check your Apps Script code.'); }
+
+      if (json.error) throw new Error('Apps Script error: ' + json.error);
+
+      const rows = json.data || json;
+      if (!Array.isArray(rows) || rows.length === 0) throw new Error('No data returned from sheet. Check the sheet tab name.');
+
+      // Convert 2D array into workbook
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      masterWB = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(masterWB, ws, tabName);
+      masterFromDrive = true;
+      masterSheetName = tabName;
+      masterFileName = 'Kapture_Daily_Pending_Data';
+      savedAppsScriptUrl = url;
+
+      showSheetStatus(`✅ Connected via Apps Script! Tab: "${tabName}" — ${rows.length - 1} rows loaded`, 'ok');
+      document.getElementById('masterLoaded').textContent = `✅ Apps Script — "${tabName}" — ${rows.length - 1} rows`;
+      document.getElementById('masterLoaded').style.display = 'block';
+      document.getElementById('masterBox').classList.add('loaded');
+      document.getElementById('nb-master').textContent = 'connected ✓';
+      updateReadyState();
+
+    } else {
+      // ── Public Google Sheet fallback ─────────────────────
+      const idMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      if (!idMatch) throw new Error('Could not find spreadsheet ID in URL');
+      const sheetId = idMatch[1];
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+      const res = await fetch(csvUrl);
+      if (!res.ok) throw new Error('Could not fetch. Make sure sheet is shared as "Anyone with link can view".');
+      const csv = await res.text();
+      if (csv.includes('<!DOCTYPE') || csv.length < 10) throw new Error('No data returned. Check sharing settings.');
+      masterWB = XLSX.read(csv, { type: 'string' });
+      masterFromDrive = true;
+      masterSheetName = masterWB.SheetNames[0];
+      masterFileName = 'Kapture_Daily_Pending_Data';
+      const rows = XLSX.utils.sheet_to_json(masterWB.Sheets[masterSheetName], { header: 1 });
+      showSheetStatus(`✅ Connected! Tab: "${tabName}" — ${rows.length - 1} rows`, 'ok');
+      document.getElementById('masterLoaded').textContent = `✅ Google Sheet — "${tabName}" — ${rows.length - 1} rows`;
+      document.getElementById('masterLoaded').style.display = 'block';
+      document.getElementById('masterBox').classList.add('loaded');
+      document.getElementById('nb-master').textContent = 'connected ✓';
+      updateReadyState();
+    }
+
+  } catch(err) {
+    showSheetStatus('❌ ' + err.message + ' — <span style="cursor:pointer;text-decoration:underline" onclick="document.getElementById(\'errorModal\').classList.add(\'show\')">View Details</span>', 'err');
+    showError(err, { stepName: 'Connect Master Sheet', pipelineState: [] });
+  }
+}
+
+function showSheetStatus(msg, type) {
+  const el = document.getElementById('sheetStatus');
+  el.className = 'gsheet-status ' + type;
+  el.textContent = msg;
+}
+
+// ══════════════════════════════════════════════
+// EXTRA FILTERS
+// ══════════════════════════════════════════════
+let extraFilters = [];
+function addExtraFilter() {
+  const id = Date.now();
+  extraFilters.push({ id, col: '', val: '', type: 'exact' });
+  renderExtraFilters();
+}
+function removeExtraFilter(id) {
+  extraFilters = extraFilters.filter(f => f.id !== id);
+  renderExtraFilters();
+}
+function renderExtraFilters() {
+  const el = document.getElementById('extraFilters');
+  el.innerHTML = extraFilters.map(f => `
+    <div style="display:grid;grid-template-columns:1fr 1fr 140px 32px;gap:8px;align-items:end">
+      <div class="field"><label>Column</label><input value="${f.col}" onchange="updateEF(${f.id},'col',this.value)" placeholder="Column name"></div>
+      <div class="field"><label>Value</label><input value="${f.val}" onchange="updateEF(${f.id},'val',this.value)" placeholder="Value to match"></div>
+      <div class="field"><label>Match</label><select onchange="updateEF(${f.id},'type',this.value)">
+        <option value="exact" ${f.type==='exact'?'selected':''}>Exact</option>
+        <option value="contains" ${f.type==='contains'?'selected':''}>Contains</option>
+        <option value="startswith" ${f.type==='startswith'?'selected':''}>Starts with</option>
+      </select></div>
+      <button class="btn btn-ghost btn-sm" style="padding:6px 8px" onclick="removeExtraFilter(${f.id})">✕</button>
+    </div>`).join('');
+}
+function updateEF(id, key, val) {
+  const f = extraFilters.find(f => f.id === id);
+  if (f) f[key] = val;
+}
+
+// ══════════════════════════════════════════════
+// INSTRUCTIONS
+// ══════════════════════════════════════════════
+function renderInstructions() {
+  const el = document.getElementById('instList');
+  el.innerHTML = instructions.map(inst => `
+    <div class="inst-item ${inst.on ? 'enabled' : 'disabled-item'}">
+      <button class="inst-toggle ${inst.on ? 'on' : ''}" onclick="toggleInst(${inst.id})"></button>
+      <div class="inst-content">
+        <div class="inst-name">${inst.name} ${inst.builtin ? '<span style="font-size:0.5rem;padding:1px 5px;background:var(--dim);color:var(--muted);border-radius:3px;margin-left:4px">BUILT-IN</span>' : ''}</div>
+        <div class="inst-desc">${inst.desc}</div>
+        <div style="font-size:0.54rem;color:var(--muted);margin-top:3px">When: ${inst.when}</div>
+      </div>
+      ${!inst.builtin ? `<button class="inst-remove" onclick="removeInst(${inst.id})">✕</button>` : ''}
+    </div>`).join('');
+
+  const active = instructions.filter(i => i.on).length;
+  document.getElementById('nb-inst').textContent = active + ' active';
+}
+
+function toggleInst(id) {
+  const inst = instructions.find(i => i.id === id);
+  if (inst && !inst.builtin) inst.on = !inst.on;
+  renderInstructions();
+}
+
+function removeInst(id) {
+  const idx = instructions.findIndex(i => i.id === id);
+  if (idx >= 0) instructions.splice(idx, 1);
+  renderInstructions();
+}
+
+function addInstruction() {
+  const name = document.getElementById('newInstName').value.trim();
+  const desc = document.getElementById('newInstDesc').value.trim();
+  const when = document.getElementById('newInstWhen').value;
+  if (!name || !desc) { alert('Please fill in both name and instruction.'); return; }
+  instructions.push({ id: instId++, name, desc, when, on: true, builtin: false });
+  document.getElementById('newInstName').value = '';
+  document.getElementById('newInstDesc').value = '';
+  renderInstructions();
+}
+
+function addPreset(name, desc, when) {
+  instructions.push({ id: instId++, name, desc, when, on: true, builtin: false });
+  renderInstructions();
+}
+
+// ══════════════════════════════════════════════
+// LOGGING
+// ══════════════════════════════════════════════
+function log(msg, t = 'i') {
+  const el = document.getElementById('log');
+  const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+  const cls = { i: 'l-i', ok: 'l-ok', w: 'l-w', e: 'l-e', d: 'l-d' }[t] || 'l-i';
+  el.innerHTML += `<div><span class="l-t">${time}</span><span class="${cls}">${msg}</span></div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function setProgress(label, pct) {
+  document.getElementById('progLabel').textContent = label;
+  document.getElementById('progPct').textContent = pct + '%';
+  document.getElementById('progFill').style.width = pct + '%';
+}
+
+function setPipe(id, state) {
+  const el = document.getElementById(id);
+  el.classList.remove('active', 'done', 'error');
+  if (state) el.classList.add(state);
+}
+
+function colLetter2Idx(col) {
+  col = col.toUpperCase().trim();
+  let n = 0;
+  for (let i = 0; i < col.length; i++) n = n * 26 + col.charCodeAt(i) - 64;
+  return n - 1;
+}
+
+function matchRow(row, idx, val, type) {
+  const cell = (row[idx] || '').toString().trim().toLowerCase();
+  val = val.toLowerCase();
+  if (type === 'exact') return cell === val;
+  if (type === 'contains') return cell.includes(val);
+  if (type === 'startswith') return cell.startsWith(val);
+  return false;
+}
+
+function applyCustomInstructions(rows, headers, when) {
+  const active = instructions.filter(i => i.on && !i.builtin && i.when === when);
+  active.forEach(inst => {
+    log(`⚙️ Custom: "${inst.name}"`, 'i');
+    const d = inst.desc.toLowerCase();
+
+    // Sort by date
+    if (d.includes('sort') && d.includes('date')) {
+      const dateIdx = headers.findIndex(h => h.toLowerCase().includes('created date') || h.toLowerCase().includes('date'));
+      if (dateIdx >= 0) rows.sort((a, b) => new Date(a[dateIdx]) - new Date(b[dateIdx]));
+      log(`  ✓ Sorted by "${headers[dateIdx]}"`, 'ok');
+    }
+
+    // Remove closed/resolved
+    if (d.includes('remove') && (d.includes('closed') || d.includes('resolved'))) {
+      const statusIdx = headers.findIndex(h => h.toLowerCase() === 'status');
+      if (statusIdx >= 0) {
+        const before = rows.length;
+        rows = rows.filter(r => {
+          const s = (r[statusIdx] || '').toString().toLowerCase();
+          return !s.includes('closed') && !s.includes('resolved');
+        });
+        log(`  ✓ Removed ${before - rows.length} closed/resolved rows`, 'ok');
+      }
+    }
+
+    // Flag aging
+    if (d.includes('aging') || d.includes('flag')) {
+      const daysIdx = headers.findIndex(h => h.toLowerCase().includes('pending no of days'));
+      const match = d.match(/(\d+)/);
+      const threshold = match ? parseInt(match[1]) : 30;
+      if (daysIdx >= 0) {
+        if (!headers.includes('Aging Flag')) headers.push('Aging Flag');
+        const flagIdx = headers.indexOf('Aging Flag');
+        rows.forEach(r => {
+          const days = parseInt(r[daysIdx]) || 0;
+          while (r.length <= flagIdx) r.push('');
+          r[flagIdx] = days > threshold ? 'YES' : 'NO';
+        });
+        log(`  ✓ Aging flag added (threshold: ${threshold} days)`, 'ok');
+      }
+    }
+
+    // Keep key columns
+    if (d.includes('keep only') || d.includes('key columns')) {
+      const keepNames = ['Ticket No', 'Created Date', 'Customer Name', 'Status', 'Disposition Folder Level 3', 'Zone', 'City'];
+      const keepIdx = keepNames.map(k => headers.findIndex(h => h.toLowerCase() === k.toLowerCase())).filter(i => i >= 0);
+      if (keepIdx.length > 0) {
+        rows = rows.map(r => keepIdx.map(i => r[i] || ''));
+        const newHeaders = keepIdx.map(i => headers[i]);
+        headers.length = 0; headers.push(...newHeaders);
+        log(`  ✓ Kept ${keepIdx.length} key columns`, 'ok');
+      }
+    }
+  });
+  return rows;
+}
+
+// ══════════════════════════════════════════════
+// MAIN AGENT
+// ══════════════════════════════════════════════
+async function runAgent() {
+  // Navigate to pipeline view
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-pipeline').classList.add('active');
+
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('log').innerHTML = '';
+  document.getElementById('statsRow').style.display = 'none';
+  ['p1','p2','p3','p4','p5'].forEach(p => setPipe(p, null));
+  document.getElementById('nb-pipe').textContent = 'running';
+  newTickets = []; dupeTickets = []; updatedMasterRows = [];
+
+  try {
+    // ── STEP 1: Filter ──────────────────────────────────────
+    setPipe('p1', 'active');
+    setProgress('Step 1: Filtering raw file...', 10);
+    log('═══ STEP 1: Filter Raw File ═══', 'd');
+
+    const filterCol = document.getElementById('filterCol').value.trim().toLowerCase();
+    const filterVal = document.getElementById('filterVal').value.trim();
+    const matchType = document.getElementById('matchType').value;
+
+    const rawSheet = rawWB.SheetNames[0];
+    const rawAllRows = XLSX.utils.sheet_to_json(rawWB.Sheets[rawSheet], { header: 1, defval: '' });
+    rawHeaders = rawAllRows[0].map(h => h ? h.toString().trim() : '');
+    const rawData = rawAllRows.slice(1).filter(r => r.some(c => c !== ''));
+
+    log(`Raw file: ${rawData.length} rows, ${rawHeaders.length} columns`);
+
+    const colIdx = rawHeaders.findIndex(h => h.toLowerCase().includes(filterCol));
+    if (colIdx < 0) throw new Error(`Column "${document.getElementById('filterCol').value}" not found in raw file`);
+    log(`✓ Column "${rawHeaders[colIdx]}" found at position ${colIdx + 1}`, 'ok');
+
+    let filtered = rawData.filter(r => matchRow(r, colIdx, filterVal, matchType));
+    log(`✅ ${filtered.length} rows match "${filterVal}" (from ${rawData.length} total)`, 'ok');
+
+    // Extra filters
+    extraFilters.forEach(ef => {
+      if (!ef.col || !ef.val) return;
+      const idx = rawHeaders.findIndex(h => h.toLowerCase().includes(ef.col.toLowerCase()));
+      if (idx < 0) { log(`⚠️ Extra filter column "${ef.col}" not found, skipping`, 'w'); return; }
+      const before = filtered.length;
+      filtered = filtered.filter(r => matchRow(r, idx, ef.val, ef.type));
+      log(`  + Extra filter "${ef.col}=${ef.val}": ${before} → ${filtered.length} rows`, 'i');
+    });
+
+    // Custom instructions after-filter
+    filtered = applyCustomInstructions(filtered, rawHeaders, 'after-filter');
+
+    document.getElementById('s1').textContent = rawData.length.toLocaleString();
+    document.getElementById('s2').textContent = filtered.length.toLocaleString();
+    setPipe('p1', 'done');
+    await sleep(200);
+
+    // ── STEP 2: Load Master ─────────────────────────────────
+    setPipe('p2', 'active');
+    setProgress('Step 2: Loading master sheet...', 28);
+    log('═══ STEP 2: Load Master Sheet ═══', 'd');
+
+    const configTab = document.getElementById('sheetTabName').value.trim();
+    if (masterFromDrive) {
+      log(`✓ Using Google Drive sheet (already loaded)`, 'ok');
+      masterSheetName = masterWB.SheetNames[0];
+    } else {
+      masterSheetName = masterWB.SheetNames.find(s => s.toLowerCase() === configTab.toLowerCase()) || masterWB.SheetNames[0];
+      log(`✓ Using uploaded file, sheet: "${masterSheetName}"`, 'ok');
+    }
+
+    const masterAllRows = XLSX.utils.sheet_to_json(masterWB.Sheets[masterSheetName], { header: 1, defval: '' });
+    masterHeaders = masterAllRows[0].map(h => h ? h.toString().trim() : '');
+    masterOriginalRows = masterAllRows.slice(1).filter(r => r.some(c => c !== ''));
+
+    log(`Master: ${masterOriginalRows.length} existing rows, ${masterHeaders.length} columns`, 'ok');
+
+    const mTicketColName = document.getElementById('masterTicketCol').value.trim().toLowerCase();
+    const mTicketIdx = masterHeaders.findIndex(h => h.toLowerCase().includes(mTicketColName));
+    const rTicketIdx = rawHeaders.findIndex(h => h.toLowerCase().includes(mTicketColName));
+    if (mTicketIdx < 0) throw new Error(`Ticket ID column not found in master sheet`);
+    if (rTicketIdx < 0) throw new Error(`Ticket ID column not found in raw file`);
+    log(`✓ Ticket ID column: "${masterHeaders[mTicketIdx]}"`, 'ok');
+
+    setPipe('p2', 'done');
+    await sleep(200);
+
+    // ── STEP 3: Dedupe ──────────────────────────────────────
+    setPipe('p3', 'active');
+    setProgress('Step 3: Removing duplicates...', 50);
+    log('═══ STEP 3: Deduplicate ═══', 'd');
+
+    const existingIDs = new Set(masterOriginalRows.map(r => (r[mTicketIdx] || '').toString().trim()));
+    log(`${existingIDs.size} existing ticket IDs in master`);
+
+    newTickets = []; dupeTickets = [];
+    filtered.forEach(row => {
+      const id = (row[rTicketIdx] || '').toString().trim();
+      (existingIDs.has(id) ? dupeTickets : newTickets).push(row);
+    });
+
+    log(`Duplicates: ${dupeTickets.length} already in master`, 'w');
+    log(`✅ New tickets to append: ${newTickets.length}`, 'ok');
+    document.getElementById('s3').textContent = dupeTickets.length.toLocaleString();
+    document.getElementById('s4').textContent = newTickets.length.toLocaleString();
+
+    // Custom instructions after-dedupe
+    newTickets = applyCustomInstructions(newTickets, [...rawHeaders], 'after-dedupe');
+
+    setPipe('p3', 'done');
+    await sleep(200);
+
+    // ── STEP 4: Append ──────────────────────────────────────
+    setPipe('p4', 'active');
+    setProgress('Step 4: Appending to master sheet...', 68);
+    log('═══ STEP 4: Append New Tickets ═══', 'd');
+
+    // Map raw columns → master columns
+    const colMap = masterHeaders.map(mh => rawHeaders.findIndex(rh => rh.toLowerCase() === mh.toLowerCase()));
+    const matched = colMap.filter(i => i >= 0).length;
+    log(`Column match: ${matched} of ${masterHeaders.length} master columns matched`, 'ok');
+
+    const appendRows = newTickets.map(rawRow => masterHeaders.map((_, mi) => {
+      const ri = colMap[mi];
+      return ri >= 0 ? rawRow[ri] : '';
+    }));
+
+    // Custom instructions after-append
+    const appendRowsProcessed = applyCustomInstructions([...appendRows], [...masterHeaders], 'after-append');
+    updatedMasterRows = [...masterOriginalRows, ...appendRowsProcessed];
+
+    log(`✅ Appended ${appendRowsProcessed.length} rows (master: ${masterOriginalRows.length} → ${updatedMasterRows.length})`, 'ok');
+    document.getElementById('s5').textContent = appendRowsProcessed.length.toLocaleString();
+    setPipe('p4', 'done');
+    await sleep(200);
+
+    // ── STEP 5: Drag last formula in CL/CM down + write date in CN ──
+    setPipe('p5', 'active');
+    setProgress('Step 5: Dragging formulas and writing date...', 85);
+    log('═══ STEP 5: Drag CL/CM Last Formula + Write Date in CN ═══', 'd');
+
+    const CL_IDX = colLetter2Idx(document.getElementById('formulaCol1').value || 'CL');
+    const CM_IDX = colLetter2Idx(document.getElementById('formulaCol2').value || 'CM');
+    const CN_IDX = colLetter2Idx(document.getElementById('dateCol').value || 'CN');
+
+    const today = new Date();
+    const todayStr = today.toLocaleDateString('en-GB');
+
+    // Scan from LAST row upward to find the most recent formula in CL and CM
+    // This simulates "drag last formula down" exactly
+    const ws_orig = masterWB.Sheets[masterSheetName];
+    let clFormula = null, cmFormula = null;
+    let clSourceRow = null, cmSourceRow = null;
+
+    for (let r = masterOriginalRows.length; r >= 1; r--) {
+      const clCell = ws_orig[XLSX.utils.encode_cell({ r, c: CL_IDX })];
+      const cmCell = ws_orig[XLSX.utils.encode_cell({ r, c: CM_IDX })];
+      if (!clFormula && clCell && clCell.f) { clFormula = clCell.f; clSourceRow = r; }
+      if (!cmFormula && cmCell && cmCell.f) { cmFormula = cmCell.f; cmSourceRow = r; }
+      if (clFormula && cmFormula) break;
+    }
+
+    if (clFormula) log(`✓ CL: last formula at row ${clSourceRow + 1} — dragging down`, 'ok');
+    else log(`⚠️ CL formula not in XLSX (Apps Script returns values). Using known formula pattern.`, 'w');
+    if (cmFormula) log(`✓ CM: last formula at row ${cmSourceRow + 1} — dragging down`, 'ok');
+    else log(`⚠️ CM formula not in XLSX (Apps Script returns values). Using known formula pattern.`, 'w');
+
+    log(`Writing today's date (${todayStr}) in column CN`, 'i');
+
+    masterWBFinal = XLSX.utils.book_new();
+    const firstNewRow = masterOriginalRows.length + 1; // 0-indexed sheet row
+
+    masterWB.SheetNames.forEach(sn => {
+      if (sn === masterSheetName) {
+        const sheetData = [masterHeaders, ...updatedMasterRows];
+        const wsNew = XLSX.utils.aoa_to_sheet(sheetData);
+
+        for (let i = 0; i < appendRowsProcessed.length; i++) {
+          const targetRow = firstNewRow + i;
+          const R = targetRow + 1; // 1-indexed Excel row number
+
+          // CL — drag last found formula, or use known pattern
+          if (clFormula && clSourceRow !== null) {
+            wsNew[XLSX.utils.encode_cell({ r: targetRow, c: CL_IDX })] = {
+              t: 'n', f: adjustFormula(clFormula, clSourceRow, targetRow)
+            };
+          } else {
+            // Known pattern from your sheet:
+            // =IF(AND(B{R}<>"",C{R}<>""),DATE(MID(B{R},7,4),MID(B{R},4,2),MID(B{R},1,2))+TIMEVALUE(C{R}),"")
+            wsNew[XLSX.utils.encode_cell({ r: targetRow, c: CL_IDX })] = {
+              t: 'n', f: `IF(AND(B${R}<>"",C${R}<>""),DATE(MID(B${R},7,4),MID(B${R},4,2),MID(B${R},1,2))+TIMEVALUE(C${R}),"")`
+            };
+          }
+
+          // CM — drag last found formula, or use known pattern
+          if (cmFormula && cmSourceRow !== null) {
+            wsNew[XLSX.utils.encode_cell({ r: targetRow, c: CM_IDX })] = {
+              t: 'n', f: adjustFormula(cmFormula, cmSourceRow, targetRow)
+            };
+          } else {
+            // Known pattern from your sheet:
+            // =IF(B{R}<>"",IF(C{R}="Ticket pending","Ticket pending","Ticket Closed"),"")
+            wsNew[XLSX.utils.encode_cell({ r: targetRow, c: CM_IDX })] = {
+              t: 'n', f: `IF(B${R}<>"",IF(C${R}="Ticket pending","Ticket pending","Ticket Closed"),"")`
+            };
+          }
+
+          // CN — today's date
+          wsNew[XLSX.utils.encode_cell({ r: targetRow, c: CN_IDX })] = { t: 's', v: todayStr };
+        }
+
+        XLSX.utils.book_append_sheet(masterWBFinal, wsNew, sn);
+      } else {
+        XLSX.utils.book_append_sheet(masterWBFinal, masterWB.Sheets[sn], sn);
+      }
+    });
+
+    log(`✅ CL/CM formulas dragged down to ${appendRowsProcessed.length} new rows`, 'ok');
+    log(`✅ Today's date (${todayStr}) written in CN for all new rows`, 'ok');
+    setPipe('p5', 'done');
+    setProgress('All done!', 100);
+
+    log('', 'd');
+    log('══════════════════════════════════════', 'd');
+    log(`🎉 COMPLETE — ${newTickets.length} new tickets appended to master`, 'ok');
+    log('══════════════════════════════════════', 'd');
+
+    document.getElementById('statsRow').style.display = 'grid';
+    document.getElementById('nb-pipe').textContent = 'done ✓';
+    document.getElementById('nb-results').textContent = newTickets.length + ' new';
+    document.getElementById('btnNew').disabled = false;
+    document.getElementById('btnMaster').disabled = false;
+    document.getElementById('tnew').textContent = `(${newTickets.length})`;
+    document.getElementById('tdupe').textContent = `(${dupeTickets.length})`;
+    document.getElementById('tmaster').textContent = `(${updatedMasterRows.length})`;
+
+    renderTables();
+
+  } catch(err) {
+    log('❌ ERROR: ' + err.message, 'e');
+    log('👉 Click "View Error Details" below for help fixing this', 'w');
+    setProgress('Error — see details', 0);
+
+    // Mark failed step
+    let failedStep = null, failedStepName = null;
+    const stepMap = {p1:'Filter Raw File', p2:'Load Master Sheet', p3:'Deduplicate', p4:'Append to Master', p5:'Formulas + Date'};
+    Object.entries(stepMap).forEach(([id, name]) => {
+      if (document.getElementById(id).classList.contains('active')) {
+        setPipe(id, 'error');
+        failedStep = id; failedStepName = name;
+      }
+    });
+
+    // Build pipeline state array
+    const pipelineState = ['p1','p2','p3','p4','p5'].map(id => {
+      const el = document.getElementById(id);
+      if (el.classList.contains('done')) return 'done';
+      if (el.classList.contains('error')) return 'failed';
+      if (el.classList.contains('active')) return 'active';
+      return 'pending';
+    });
+
+    document.getElementById('nb-pipe').textContent = 'error';
+
+    // Show error modal automatically
+    showError(err, { step: failedStep, stepName: failedStepName, pipelineState });
+
+    // Add clickable error banner to log
+    const logEl = document.getElementById('log');
+    logEl.innerHTML += `<div style="margin-top:8px"><span style="background:rgba(255,85,102,0.1);border:1px solid rgba(255,85,102,0.3);border-radius:6px;padding:4px 10px;color:#ff5566;cursor:pointer;font-size:0.62rem" onclick="document.getElementById('errorModal').classList.add('show')">🚨 View Full Error Details →</span></div>`;
+  }
+
+  document.getElementById('runBtn').disabled = false;
+}
+
+// ══════════════════════════════════════════════
+// UTILITIES
+// ══════════════════════════════════════════════
+function adjustFormula(formula, from, to) {
+  return formula.replace(/([A-Z]+)(\d+)/g, (_, col, row) => col + (parseInt(row) + (to - from)));
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ══════════════════════════════════════════════
+// RENDER TABLES
+// ══════════════════════════════════════════════
+function renderTables() {
+  renderTable('tblNew', 'emNew', rawHeaders, newTickets);
+  renderTable('tblDupe', 'emDupe', rawHeaders, dupeTickets);
+  renderMasterTable();
+}
+
+function renderTable(tblId, emId, headers, rows) {
+  if (!rows.length) return;
+  document.getElementById(emId).style.display = 'none';
+  const show = Math.min(headers.length, 12);
+  let h = '<div class="tbl-wrap"><table><thead><tr>';
+  headers.slice(0, show).forEach(c => { h += `<th>${c}</th>`; });
+  if (headers.length > show) h += `<th>+${headers.length - show} more</th>`;
+  h += '</tr></thead><tbody>';
+  rows.slice(0, 300).forEach(r => {
+    h += '<tr>';
+    headers.slice(0, show).forEach((_, i) => { h += `<td title="${r[i]||''}">${r[i]||''}</td>`; });
+    if (headers.length > show) h += '<td style="color:var(--muted)">...</td>';
+    h += '</tr>';
+  });
+  if (rows.length > 300) h += `<tr><td colspan="${show+1}" style="text-align:center;padding:10px;color:var(--muted);font-size:0.6rem">Showing 300 of ${rows.length} rows</td></tr>`;
+  h += '</tbody></table></div>';
+  document.getElementById(tblId).innerHTML = h;
+}
+
+function renderMasterTable() {
+  if (!updatedMasterRows.length) return;
+  document.getElementById('emMaster').style.display = 'none';
+  const oldCount = masterOriginalRows.length;
+  const show = Math.min(masterHeaders.length, 12);
+  let h = '<div class="tbl-wrap"><table><thead><tr><th>#</th>';
+  masterHeaders.slice(0, show).forEach(c => { h += `<th>${c}</th>`; });
+  h += '</tr></thead><tbody>';
+  updatedMasterRows.slice(0, 300).forEach((r, i) => {
+    const isNew = i >= oldCount;
+    h += `<tr style="${isNew ? 'background:rgba(46,204,138,0.04)' : ''}">`;
+    h += `<td style="color:var(--muted);font-size:0.55rem">${i+1}${isNew ? ' <span class="chip chip-green">NEW</span>' : ''}</td>`;
+    masterHeaders.slice(0, show).forEach((_, ci) => { h += `<td>${r[ci]||''}</td>`; });
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  document.getElementById('tblMaster').innerHTML = h;
+}
+
+function switchTab(name) {
+  const names = ['new', 'dupe', 'master'];
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
+  document.querySelectorAll('.tab-panel').forEach((p, i) => p.classList.toggle('active', names[i] === name));
+}
+
+// ══════════════════════════════════════════════
+// EXPORTS
+// ══════════════════════════════════════════════
+function exportNew() {
+  if (!newTickets.length) return;
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([rawHeaders, ...newTickets]), 'New Tickets');
+  XLSX.writeFile(wb, `New_Internet_Issues_${fmt(new Date())}.xlsx`);
+}
+function exportMaster() {
+  if (!masterWBFinal) return;
+  XLSX.writeFile(masterWBFinal, `Kapture_Daily_Pending_Updated_${fmt(new Date())}.xlsx`);
+}
+function fmt(d) { return d.toISOString().slice(0,10).replace(/-/g,''); }
+
+
+
+// ══════════════════════════════════════════════
+// ERROR MODAL
+// ══════════════════════════════════════════════
+let lastErrorDetails = null;
+
+function showError(err, context = {}) {
+  const { step = null, stepName = null, pipelineState = [] } = context;
+
+  lastErrorDetails = {
+    message: err.message || String(err),
+    step, stepName,
+    pipelineState,
+    timestamp: new Date().toLocaleString(),
+    stack: err.stack || 'No stack trace available'
+  };
+
+  // Title
+  document.getElementById('modalTitle').textContent = stepName
+    ? `Error in Step: ${stepName}`
+    : 'Error Details';
+
+  // Message
+  document.getElementById('modalMessage').textContent = err.message || String(err);
+
+  // Pipeline steps
+  const stepNames = ['Filter Raw File', 'Load Master Sheet', 'Deduplicate', 'Append to Master', 'Formulas + Date'];
+  if (pipelineState.length > 0) {
+    document.getElementById('modalStepSection').style.display = 'block';
+    document.getElementById('modalSteps').innerHTML = stepNames.map((name, i) => {
+      const state = pipelineState[i] || 'pending';
+      const icon = state === 'done' ? '✅' : state === 'failed' ? '❌' : state === 'active' ? '⏳' : '○';
+      const cls = state === 'done' ? 'step-ok' : state === 'failed' ? 'step-failed' : 'step-skip';
+      return `<div class="${cls}">${icon} Step ${i+1}: ${name}</div>`;
+    }).join('');
+  } else {
+    document.getElementById('modalStepSection').style.display = 'none';
+  }
+
+  // Fix suggestions
+  const fixes = getSuggestions(err.message || '', stepName || '');
+  if (fixes.length > 0) {
+    document.getElementById('modalFixSection').style.display = 'block';
+    document.getElementById('modalFixes').innerHTML = fixes
+      .map((f, i) => `<div class="fix-item"><div class="fix-num">${i+1}</div><div>${f}</div></div>`)
+      .join('');
+  } else {
+    document.getElementById('modalFixSection').style.display = 'none';
+  }
+
+  // Trace
+  document.getElementById('modalTrace').textContent =
+    `Time: ${lastErrorDetails.timestamp}\n` +
+    `Step: ${stepName || 'N/A'}\n` +
+    `Message: ${err.message}\n\n` +
+    `Stack:\n${err.stack || 'Not available'}`;
+
+  document.getElementById('modalTime').textContent = 'Occurred at: ' + lastErrorDetails.timestamp;
+
+  // Show
+  document.getElementById('errorModal').classList.add('show');
+}
+
+function getSuggestions(msg, stepName) {
+  const m = msg.toLowerCase();
+  const s = stepName.toLowerCase();
+  const fixes = [];
+
+  // Apps Script errors
+  if (m.includes('failed to fetch') || m.includes('networkerror') || m.includes('cors')) {
+    fixes.push('The Apps Script URL may be wrong or the deployment was deleted. Go to Extensions → Apps Script → Deploy → Manage deployments and copy the latest /exec URL.');
+    fixes.push('Make sure "Who has access" is set to <strong>Anyone</strong> in your deployment settings, not "Only myself".');
+    fixes.push('Check your internet connection and try again.');
+  }
+  if (m.includes('html page') || m.includes('<!doctype')) {
+    fixes.push('The script returned an HTML error page. This usually means you need to re-authorize the script. Open the /exec URL in your browser directly and allow access.');
+    fixes.push('Re-deploy the script: Deploy → New deployment (not "Manage deployments").');
+  }
+  if (m.includes('sheet not found') || m.includes('tab name')) {
+    fixes.push('The sheet tab name does not match. Go to your master sheet and check the exact tab name at the bottom (e.g. "22nd Dec" not "22 Dec").');
+    fixes.push('Update the "Sheet Tab Name" field in the Master Sheet config to exactly match your tab name.');
+  }
+  if (m.includes('column') && m.includes('not found')) {
+    fixes.push('The column name in the filter config does not match the actual column in the file. Check the exact spelling including spaces and capitals.');
+    fixes.push('Download the raw file and open it to check the exact column header name, then update the Filter Config.');
+  }
+  if (m.includes('ticket id') || m.includes('ticket no')) {
+    fixes.push('The "Ticket ID Column" field does not match the column name in your file. Default is "Ticket No" — check if it is named differently in your raw file or master sheet.');
+  }
+  if (m.includes('no data') || m.includes('empty')) {
+    fixes.push('The file or sheet appears to have no data rows. Make sure the file is not empty and has at least a header row + one data row.');
+    fixes.push('Check that the sheet tab name is correct — the script may be reading the wrong tab.');
+  }
+  if (m.includes('parse') || m.includes('json') || m.includes('valid')) {
+    fixes.push('The Apps Script returned unexpected data. Open your Apps Script and click "Run" on the doGet function to test it directly and check for errors.');
+    fixes.push('Make sure you copied the script code exactly as provided without any modifications.');
+  }
+  if (s.includes('filter')) {
+    fixes.push('Check that the Filter Column name exactly matches the column header in your raw file (e.g. "Disposition Folder Level 3").');
+    fixes.push('Try changing Match Type to "Contains" instead of "Exact match" if the values have extra spaces.');
+  }
+  if (s.includes('append') || s.includes('master')) {
+    fixes.push('Make sure both files have a "Ticket No" column with the same name. If the column is named differently, update the "Ticket ID Column" field.');
+    fixes.push('Check that the master sheet has at least a header row before running.');
+  }
+
+  // Generic fallback
+  if (fixes.length === 0) {
+    fixes.push('Check the Agent Log for more details on what step failed.');
+    fixes.push('Try re-uploading the raw file to make sure it is not corrupted or in an unsupported format.');
+    fixes.push('Copy the full error trace using the button below and share it for further help.');
+  }
+
+  return fixes;
+}
+
+function closeModal() {
+  document.getElementById('errorModal').classList.remove('show');
+}
+
+function closeErrorModal(e) {
+  if (e.target === document.getElementById('errorModal')) closeModal();
+}
+
+function copyErrorDetails() {
+  if (!lastErrorDetails) return;
+  const text = [
+    `=== Ticket Agent Error Report ===`,
+    `Time: ${lastErrorDetails.timestamp}`,
+    `Step: ${lastErrorDetails.stepName || 'N/A'}`,
+    `Message: ${lastErrorDetails.message}`,
+    ``,
+    `Pipeline State:`,
+    ...(lastErrorDetails.pipelineState.map((s, i) => `  Step ${i+1}: ${s}`)),
+    ``,
+    `Stack Trace:`,
+    lastErrorDetails.stack
+  ].join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.btn-copy-error');
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => { btn.textContent = '📋 Copy Error Details'; }, 2000);
+  });
+}
+
+// Keyboard close
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+
+// ── Update / Clear Script URL ────────────────────────────
+function updateScriptUrl() {
+  const newUrl = document.getElementById('sheetUrlEdit').value.trim();
+  if (!newUrl) { 
+    document.getElementById('sheetStatusEdit').className = 'gsheet-status err';
+    document.getElementById('sheetStatusEdit').textContent = '❌ Please paste a new URL first';
+    return;
+  }
+  document.getElementById('sheetUrl').value = newUrl;
+  document.getElementById('sheetUrlEdit').value = '';
+  document.getElementById('sheetStatusEdit').className = 'gsheet-status loading';
+  document.getElementById('sheetStatusEdit').textContent = '🔄 URL updated — reconnecting...';
+  // Reset master state
+  masterWB = null; masterFromDrive = false;
+  document.getElementById('masterLoaded').style.display = 'none';
+  document.getElementById('masterBox').classList.remove('loaded');
+  document.getElementById('nb-master').textContent = 'not set';
+  updateReadyState();
+  // Auto-connect with new URL
+  setTimeout(() => connectSheet(), 300);
+}
+
+function clearScriptUrl() {
+  document.getElementById('sheetUrl').value = '';
+  document.getElementById('sheetUrlEdit').value = '';
+  document.getElementById('sheetStatusEdit').className = 'gsheet-status';
+  masterWB = null; masterFromDrive = false;
+  document.getElementById('masterLoaded').style.display = 'none';
+  document.getElementById('masterBox').classList.remove('loaded');
+  document.getElementById('nb-master').textContent = 'not set';
+  updateReadyState();
+  document.getElementById('sheetStatus').className = 'gsheet-status';
+}
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+renderInstructions();
+</script>
+</body>
+</html>
