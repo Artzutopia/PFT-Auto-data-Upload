@@ -708,7 +708,7 @@ tr:hover td { background: rgba(255,255,255,0.015); }
           <div class="gsheet-row">
             <div class="field" style="flex:1">
               <label>Apps Script Web App URL (ends with /exec)</label>
-              <input type="text" id="sheetUrl" placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec" oninput="onUrlInput()">
+              <input type="text" id="sheetUrl" placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec" value="https://script.google.com/macros/s/AKfycbxpay-oDT0TkgLk9XInl201Z_Cgk3fsMIEQ8luBWkumQb7YqCv4M4NtZbFSBuh88Zwh/exec" oninput="onUrlInput()">
             </div>
             <button class="btn btn-accent" onclick="connectSheet()">Connect Sheet</button>
           </div>
@@ -881,7 +881,7 @@ tr:hover td { background: rgba(255,255,255,0.015); }
         <div class="pipe-step" id="p2"><div class="spin"></div><div class="pipe-icon">🔗</div><div class="pipe-lbl">Load Master</div><div class="pipe-desc">Read master sheet from Drive or upload</div></div>
         <div class="pipe-step" id="p3"><div class="spin"></div><div class="pipe-icon">✂️</div><div class="pipe-lbl">Dedupe</div><div class="pipe-desc">Remove tickets already in master</div></div>
         <div class="pipe-step" id="p4"><div class="spin"></div><div class="pipe-icon">📎</div><div class="pipe-lbl">Append</div><div class="pipe-desc">Paste new rows at end of master</div></div>
-        <div class="pipe-step" id="p5"><div class="spin"></div><div class="pipe-icon">📅</div><div class="pipe-lbl">Finalize</div><div class="pipe-desc">Drag formulas + write date in CN</div></div>
+        <div class="pipe-step" id="p5"><div class="spin"></div><div class="pipe-icon">📅</div><div class="pipe-lbl">Finalize</div><div class="pipe-desc">Drag formulas + write date in CN + save to Sheet</div></div>
       </div>
 
       <div class="card" style="margin-bottom:14px">
@@ -1519,8 +1519,55 @@ async function runAgent() {
     log(`✅ CL/CM formulas dragged down to ${appendRowsProcessed.length} new rows`, 'ok');
     log(`✅ Today's date (${todayStr}) written in CN for all new rows`, 'ok');
     setPipe('p5', 'done');
-    setProgress('All done!', 100);
 
+    // ── STEP 6: Write new rows back to Google Sheet via Apps Script ──
+    if (savedAppsScriptUrl && appendRowsProcessed.length > 0) {
+      setProgress('Writing data back to Google Sheet...', 92);
+      log('', 'd');
+      log('═══ STEP 6: Writing Back to Google Sheet ═══', 'd');
+      log(`📤 Sending ${appendRowsProcessed.length} new rows to Google Sheet...`, 'i');
+
+      try {
+        const tabName = document.getElementById('sheetTabName').value.trim() || '22nd Dec';
+
+        // Build rows to post — match exact master header order
+        const rowsToPost = appendRowsProcessed.map(row => {
+          // row is already in master column order
+          // Set CL, CM formulas as empty string (Apps Script will get them as values)
+          // CN: today's date string
+          const r = [...row];
+          r[CL_IDX] = ''; // will be filled by formula drag in sheet
+          r[CM_IDX] = ''; // will be filled by formula drag in sheet  
+          r[CN_IDX] = todayStr;
+          return r;
+        });
+
+        const response = await fetch(savedAppsScriptUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' }, // avoid CORS preflight
+          body: JSON.stringify({ sheet: tabName, rows: rowsToPost })
+        });
+
+        const resultText = await response.text();
+        let result;
+        try { result = JSON.parse(resultText); } catch(e) { throw new Error('Invalid response from Apps Script: ' + resultText.substring(0, 100)); }
+
+        if (result.error) throw new Error(result.error);
+
+        log(`✅ Successfully wrote ${result.appended} rows directly to Google Sheet!`, 'ok');
+        log(`📊 Your master sheet "${tabName}" has been updated automatically`, 'ok');
+
+      } catch(writeErr) {
+        log(`⚠️ Could not write to sheet: ${writeErr.message}`, 'w');
+        log(`💡 New rows are still available to download from the Results tab below`, 'w');
+      }
+    } else if (appendRowsProcessed.length === 0) {
+      log('ℹ️ No new rows to write back — sheet is already up to date', 'i');
+    } else {
+      log('ℹ️ No Apps Script URL set — download the result from Results tab', 'i');
+    }
+
+    setProgress('All done!', 100);
     log('', 'd');
     log('══════════════════════════════════════', 'd');
     log(`🎉 COMPLETE — ${newTickets.length} new tickets appended to master`, 'ok');
